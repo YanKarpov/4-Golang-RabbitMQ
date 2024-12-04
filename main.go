@@ -11,27 +11,21 @@ import (
 )
 
 func main() {
-	// Инициализируем Redis клиент
-	redisClient := redis.NewRedisClient("localhost:6379", "", 0)
+	redisClient := redis.NewRedisClient("redis:6379", "", 0) 
 
-	// Инициализируем объект Config для RabbitMQ
-	// Убедитесь, что передаете все необходимые параметры, например, VirtualHost и ReconnectInterval
-	rabbitMQConfig := config.NewConfig("guest", "guest", "localhost", "5672", "/", "5s", 10)
 
-	// Инициализируем API и Consumer
+	rabbitMQConfig := config.NewConfig("guest", "guest", "rabbitmq", "5672", "/", "5s", 10)
+
 	api := api.NewAPI(redisClient)
-	consumer := consumer.NewConsumer(rabbitMQConfig) // Передаем rabbitMQConfig, а не redisClient
+	consumer := consumer.NewConsumer(rabbitMQConfig) 
 
-	// Настроим маршруты API
 	r := gin.Default()
 	r.GET("/api/v1/stats", api.GetStats)
 
-	// Запускаем Consumer в отдельной горутине с передачей контекста
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go consumer.Consume(ctx) // Передаем контекст
+	go consumer.Consume(ctx) 
 
-	// Запускаем HTTP сервер
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Ошибка при запуске сервера: %v", err)
 	}
