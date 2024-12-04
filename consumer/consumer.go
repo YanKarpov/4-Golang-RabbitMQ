@@ -1,10 +1,13 @@
 package consumer
 
 import (
+	"context"
 	"log"
+	"fmt"
 	"sync"
-	 amqp"github.com/rabbitmq/amqp091-go"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"rabbitmq/config"
+	"github.com/redis/go-redis/v9"
 )
 
 type Consumer struct {
@@ -16,18 +19,20 @@ func NewConsumer(config *config.Config) *Consumer {
 }
 
 // Consume подключается к RabbitMQ и обрабатывает сообщения параллельно
-func (c *Consumer) Consume() {
+func (c *Consumer) Consume(ctx context.Context) {
 	// Подключение к RabbitMQ
-	conn, err := amqp.Dial("amqp://" + c.Config.Login + ":" + c.Config.Password + "@" + c.Config.Host + ":" + c.Config.Port + "/")
+	conn, err := amqp.Dial("amqp://" + c.Config.RabbitMQ.Login + ":" + c.Config.RabbitMQ.Password + "@" + c.Config.RabbitMQ.Host + ":" + c.Config.RabbitMQ.Port + "/")
 	if err != nil {
-		log.Fatalf("Не удалось подключиться к RabbitMQ: %s", err)
+		log.Printf("Не удалось подключиться к RabbitMQ: %s", err)
+		return
 	}
 	defer conn.Close()
 
 	// Создание канала
 	ch, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("Не удалось открыть канал: %s", err)
+		log.Printf("Не удалось открыть канал: %s", err)
+		return
 	}
 	defer ch.Close()
 
@@ -41,7 +46,8 @@ func (c *Consumer) Consume() {
 		nil,    // аргументы
 	)
 	if err != nil {
-		log.Fatalf("Не удалось объявить очередь: %s", err)
+		log.Printf("Не удалось объявить очередь: %s", err)
+		return
 	}
 
 	// Подписка на очередь
@@ -55,31 +61,70 @@ func (c *Consumer) Consume() {
 		nil,    // аргументы
 	)
 	if err != nil {
-		log.Fatalf("Не удалось зарегистрировать консюмера: %s", err)
+		log.Printf("Не удалось зарегистрировать консюмера: %s", err)
+		return
 	}
 
-	// Используем sync.WaitGroup для ожидания завершения всех горутин
+	// Ограничение количества горутин
+	const maxWorkers = 10
+	semaphore := make(chan struct{}, maxWorkers)
+
 	var wg sync.WaitGroup
+	log.Println("Ожидание сообщений. Для выхода нажмите CTRL+C")
 
 	// Чтение сообщений
-	log.Println("Ожидание сообщений. Для выхода нажмите CTRL+C")
-	for d := range msgs {
-		// Запускаем горутину для обработки каждого сообщения
-		wg.Add(1)
-		go func(d amqp.Delivery) {
-			defer wg.Done()
-
-			// Обработка сообщения через handler
-			err := HandleMessage(d)
-			if err == nil {
-				d.Ack(false) // Подтверждаем обработку
-			} else {
-				d.Nack(false, true) // Возвращаем сообщение в очередь
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Получен сигнал завершения, останавливаем консюмера.")
+			wg.Wait()
+			return
+		case d, ok := <-msgs:
+			if !ok {
+				log.Println("Соединение с очередью закрыто.")
+				wg.Wait()
+				return
 			}
-		}(d)
-	}
 
-	// Ожидаем завершения всех горутин
-	wg.Wait()
+			semaphore <- struct{}{} 
+			wg.Add(1)
+			go func(d amqp.Delivery) {
+				defer wg.Done()
+				defer func() { <-semaphore }() 
+
+				err := HandleMessage(d, c.Config.Redis) // передаем Redis в обработчик сообщений
+				if err == nil {
+					if err := d.Ack(false); err != nil {
+						log.Printf("Ошибка при подтверждении сообщения: %s", err)
+					}
+				} else {
+					if err := d.Nack(false, true); err != nil {
+						log.Printf("Ошибка при возврате сообщения в очередь: %s", err)
+					}
+				}
+			}(d)
+		}
+	}
 }
 
+// HandleMessage обрабатывает входящие сообщения, возможно используя Redis
+func HandleMessage(d amqp.Delivery, redisClient *redis.Client) error {
+	log.Printf("Получено сообщение: %s", string(d.Body))
+
+	// Пример использования Redis для инкремента счетчика
+	err := redisClient.Incr(context.Background(), "message_count").Err()
+	if err != nil {
+		log.Printf("Ошибка при инкрементировании счетчика сообщений: %s", err)
+		return err
+	}
+
+	// Проверяем заголовок type
+	messageType, ok := d.Headers["type"].(string)
+	if ok && messageType == "hello" {
+		log.Println("Сообщение типа hello обработано.")
+		return nil
+	}
+
+	log.Println("Неизвестный тип сообщения.")
+	return fmt.Errorf("неизвестный тип сообщения")
+}

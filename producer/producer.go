@@ -16,7 +16,7 @@ func NewProducer(config *config.Config) *Producer {
 
 func (p *Producer) Publish(message string) {
 	// Подключение к RabbitMQ
-	conn, err := amqp.Dial("amqp://" + p.Config.Login + ":" + p.Config.Password + "@" + p.Config.Host + ":" + p.Config.Port + "/")
+	conn, err := amqp.Dial("amqp://" + p.Config.RabbitMQ.Login + ":" + p.Config.RabbitMQ.Password + "@" + p.Config.RabbitMQ.Host + ":" + p.Config.RabbitMQ.Port + "/")
 	if err != nil {
 		log.Fatalf("Не удалось подключиться к RabbitMQ: %s", err)
 	}
@@ -59,4 +59,3 @@ func (p *Producer) Publish(message string) {
 
 	log.Printf("Отправлено сообщение: %s", message)
 }
-

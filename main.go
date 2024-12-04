@@ -2,51 +2,37 @@ package main
 
 import (
 	"log"
+	"context"
+	"rabbitmq/api"
 	"rabbitmq/config"
 	"rabbitmq/consumer"
-	"rabbitmq/producer"
-	"sync"
-	"strconv"
+	"rabbitmq/redis"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	// Настроим конфигурацию RabbitMQ
-	config := &config.Config{
-		Login:    "guest",   // логин
-		Password: "guest",   // пароль
-		Host:     "localhost", // хост RabbitMQ
-		Port:     "5672",      // порт RabbitMQ
+	// Инициализируем Redis клиент
+	redisClient := redis.NewRedisClient("localhost:6379", "", 0)
+
+	// Инициализируем объект Config для RabbitMQ
+	// Убедитесь, что передаете все необходимые параметры, например, VirtualHost и ReconnectInterval
+	rabbitMQConfig := config.NewConfig("guest", "guest", "localhost", "5672", "/", "5s", 10)
+
+	// Инициализируем API и Consumer
+	api := api.NewAPI(redisClient)
+	consumer := consumer.NewConsumer(rabbitMQConfig) // Передаем rabbitMQConfig, а не redisClient
+
+	// Настроим маршруты API
+	r := gin.Default()
+	r.GET("/api/v1/stats", api.GetStats)
+
+	// Запускаем Consumer в отдельной горутине с передачей контекста
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go consumer.Consume(ctx) // Передаем контекст
+
+	// Запускаем HTTP сервер
+	if err := r.Run(":8080"); err != nil {
+		log.Fatalf("Ошибка при запуске сервера: %v", err)
 	}
-
-	// Создаем нового потребителя
-	consumer := consumer.NewConsumer(config)
-
-	// Создаем производителя
-	producer := producer.NewProducer(config)
-
-	var wg sync.WaitGroup
-
-	// Отправим большое количество сообщений
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			msg := "Сообщение номер " + strconv.Itoa(i) // Преобразуем число в строку
-			log.Printf("Отправка сообщения: %s", msg)
-			producer.Publish(msg)
-		}(i)
-	}
-
-	// Запускаем консюмера
-	go consumer.Consume()
-
-	// Логируем, что консюмер запущен
-	log.Println("Консюмер и производитель запущены. Ожидаю сообщения...")
-
-	// Ожидаем завершения всех горутин, связанных с отправкой сообщений
-	wg.Wait()
-	log.Println("Все сообщения отправлены.")
-
-	// Блокируем основной поток, чтобы не завершить выполнение
-	select {}
 }

@@ -1,19 +1,36 @@
 package config
 
-// Config хранит настройки для подключения к RabbitMQ
+import "github.com/redis/go-redis/v9"
+
 type Config struct {
-	Login    string
-	Password string
-	Host     string
-	Port     string
+    RabbitMQ struct {
+        Login    string
+        Password string
+        Host     string
+        Port     string
+    }
+    Redis *redis.Client 
 }
 
-// NewConfig возвращает новый объект Config с настройками
-func NewConfig(login, password, host, port string) *Config {
-	return &Config{
-		Login:    login,
-		Password: password,
-		Host:     host,
-		Port:     port,
-	}
+func NewConfig(rabbitLogin, rabbitPassword, rabbitHost, rabbitPort, redisAddr, redisPassword string, redisDB int) *Config {
+    redisClient := redis.NewClient(&redis.Options{
+        Addr:     redisAddr,
+        Password: redisPassword, 
+        DB:       redisDB,
+    })
+
+    return &Config{
+        RabbitMQ: struct {
+            Login    string
+            Password string
+            Host     string
+            Port     string
+        }{
+            Login:    rabbitLogin,
+            Password: rabbitPassword,
+            Host:     rabbitHost,
+            Port:     rabbitPort,
+        },
+        Redis: redisClient,
+    }
 }
