@@ -7,6 +7,7 @@ import (
 	"rabbitmq/config"
 	"rabbitmq/consumer"
 	"rabbitmq/redis"
+	"rabbitmq/producer" // импортируем producer
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,6 +24,13 @@ func main() {
 	log.Println("Создание Consumer")
 	consumer := consumer.NewConsumer(rabbitMQConfig) 
 
+	// Создание Producer
+	log.Println("Создание Producer")
+	producer := producer.NewProducer(rabbitMQConfig)
+
+	log.Println("Отправка тестового сообщения в RabbitMQ")
+	producer.Publish("Тестовое сообщение в RabbitMQ")
+
 	log.Println("Инициализация маршрутов Gin")
 	r := gin.Default()
 	r.GET("/api/v1/stats", api.GetStats)
@@ -37,4 +45,3 @@ func main() {
 		log.Fatalf("Ошибка при запуске сервера: %v", err)
 	}
 }
-

@@ -51,7 +51,7 @@ func (c *Consumer) Consume(ctx context.Context) {
 
 	// Объявление очереди
 	q, err := ch.QueueDeclare(
-		"YanK", // имя очереди
+		"MyConsumer", // имя очереди
 		true,   // устойчивая
 		false,  // автоудаление
 		false,  // эксклюзивная

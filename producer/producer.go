@@ -4,6 +4,7 @@ import (
 	"log"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"rabbitmq/config"
+	"time"
 )
 
 type Producer struct {
@@ -15,12 +16,24 @@ func NewProducer(config *config.Config) *Producer {
 }
 
 func (p *Producer) Publish(message string) {
-	// Подключение к RabbitMQ
-	conn, err := amqp.Dial("amqp://" + p.Config.RabbitMQ.Login + ":" + p.Config.RabbitMQ.Password + "@" + p.Config.RabbitMQ.Host + ":" + p.Config.RabbitMQ.Port + "/")
+	var conn *amqp.Connection
+	var err error
+
+	// Повторная попытка подключения
+	for i := 1; i <= 3; i++ {
+		conn, err = amqp.Dial("amqp://" + p.Config.RabbitMQ.Login + ":" + p.Config.RabbitMQ.Password + "@" + p.Config.RabbitMQ.Host + ":" + p.Config.RabbitMQ.Port + "/")
+		if err == nil {
+			break
+		}
+		log.Printf("Попытка %d подключения к RabbitMQ не удалась: %s", i, err)
+		time.Sleep(2 * time.Second)
+	}
 	if err != nil {
-		log.Fatalf("Не удалось подключиться к RabbitMQ: %s", err)
+		log.Fatalf("Не удалось подключиться к RabbitMQ после 3 попыток: %s", err)
+		return
 	}
 	defer conn.Close()
+	log.Println("Успешное подключение к RabbitMQ.")
 
 	// Создание канала
 	ch, err := conn.Channel()
@@ -31,7 +44,7 @@ func (p *Producer) Publish(message string) {
 
 	// Объявление очереди
 	q, err := ch.QueueDeclare(
-		"my_queue", // имя очереди
+		"MyProducer", // имя очереди
 		true,       // устойчивая
 		false,      // автоудаление
 		false,      // эксклюзивная
