@@ -9,13 +9,14 @@ type Config struct {
         Host     string
         Port     string
     }
-    Redis *redis.Client 
+    Redis *redis.Client // Используем *redis.Client
 }
 
+// NewConfig создаёт новую конфигурацию для RabbitMQ и Redis
 func NewConfig(rabbitLogin, rabbitPassword, rabbitHost, rabbitPort, redisAddr, redisPassword string, redisDB int) *Config {
     redisClient := redis.NewClient(&redis.Options{
         Addr:     redisAddr,
-        Password: redisPassword, 
+        Password: redisPassword,
         DB:       redisDB,
     })
 
@@ -31,6 +32,6 @@ func NewConfig(rabbitLogin, rabbitPassword, rabbitHost, rabbitPort, redisAddr, r
             Host:     rabbitHost,
             Port:     rabbitPort,
         },
-        Redis: redisClient,
+        Redis: redisClient, // Сохраняем *redis.Client
     }
 }

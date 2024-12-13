@@ -42,14 +42,14 @@ func (p *Producer) Publish(message string) {
 	}
 	defer ch.Close()
 
-	// Объявление очереди
+	// Объявление очереди (Producer и Consumer используют одну очередь)
 	q, err := ch.QueueDeclare(
-		"MyProducer", // имя очереди
-		true,       // устойчивая
-		false,      // автоудаление
-		false,      // эксклюзивная
-		false,      // без ожидания
-		nil,        // аргументы
+		"MyQueue", // имя очереди
+		true,      // устойчивая
+		false,     // автоудаление
+		false,     // эксклюзивная
+		false,     // без ожидания
+		nil,       // аргументы
 	)
 	if err != nil {
 		log.Fatalf("Не удалось объявить очередь: %s", err)

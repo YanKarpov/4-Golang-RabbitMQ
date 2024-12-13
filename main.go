@@ -7,13 +7,20 @@ import (
 	"rabbitmq/config"
 	"rabbitmq/consumer"
 	"rabbitmq/redis"
-	"rabbitmq/producer" // импортируем producer
+	"rabbitmq/producer"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	log.Println("Инициализация клиента Redis")
 	redisClient := redis.NewRedisClient("redis:6379", "", 0)
+	
+	// Проверка подключения к Redis
+	if err := redisClient.Ping(context.Background()); err != nil {
+		log.Fatalf("Не удалось подключиться к Redis: %v", err)
+	} else {
+		log.Println("Подключение к Redis успешно!")
+	
 
 	log.Println("Инициализация конфигурации RabbitMQ")
 	rabbitMQConfig := config.NewConfig("guest", "guest", "rabbitmq", "5672", "/", "5s", 10)
@@ -44,4 +51,4 @@ func main() {
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Ошибка при запуске сервера: %v", err)
 	}
-}
+}}

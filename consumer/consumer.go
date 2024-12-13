@@ -2,13 +2,11 @@ package consumer
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/redis/go-redis/v9"
 	"rabbitmq/config"
 )
 
@@ -49,14 +47,14 @@ func (c *Consumer) Consume(ctx context.Context) {
 	}
 	defer ch.Close()
 
-	// Объявление очереди
+	// Здесь не нужно повторно объявлять очередь. Просто подписываемся на существующую очередь
 	q, err := ch.QueueDeclare(
-		"MyConsumer", // имя очереди
-		true,   // устойчивая
-		false,  // автоудаление
-		false,  // эксклюзивная
-		false,  // без ожидания
-		nil,    // аргументы
+		"MyQueue", // имя очереди (то же, что и в Producer)
+		true,      // устойчивая
+		false,     // автоудаление
+		false,     // эксклюзивная
+		false,     // без ожидания
+		nil,       // аргументы
 	)
 	if err != nil {
 		log.Fatalf("Не удалось объявить очередь: %s", err)
@@ -99,19 +97,22 @@ func (c *Consumer) Consume(ctx context.Context) {
 				return
 			}
 
-			semaphore <- struct{}{}
+			semaphore <- struct{}{} // Блокируем до выполнения горутины
 			wg.Add(1)
 
 			go func(d amqp.Delivery) {
 				defer wg.Done()
-				defer func() { <-semaphore }()
+				defer func() { <-semaphore }() // Освобождаем место для другой горутины
 
+				// Обработка сообщения
 				err := HandleMessage(d, c.Config.Redis)
 				if err == nil {
+					// Подтверждение успешной обработки сообщения
 					if ackErr := d.Ack(false); ackErr != nil {
 						log.Printf("Ошибка при подтверждении сообщения: %s", ackErr)
 					}
 				} else {
+					// Возврат сообщения в очередь в случае ошибки
 					if nackErr := d.Nack(false, true); nackErr != nil {
 						log.Printf("Ошибка при возврате сообщения в очередь: %s", nackErr)
 					}
@@ -119,26 +120,4 @@ func (c *Consumer) Consume(ctx context.Context) {
 			}(d)
 		}
 	}
-}
-
-// HandleMessage обрабатывает входящие сообщения, возможно используя Redis
-func HandleMessage(d amqp.Delivery, redisClient *redis.Client) error {
-	log.Printf("Получено сообщение: %s", string(d.Body))
-
-	// Пример использования Redis для инкремента счетчика
-	err := redisClient.Incr(context.Background(), "message_count").Err()
-	if err != nil {
-		log.Printf("Ошибка при инкрементировании счетчика сообщений: %s", err)
-		return err
-	}
-
-	// Проверяем заголовок type
-	messageType, ok := d.Headers["type"].(string)
-	if ok && messageType == "hello" {
-		log.Println("Сообщение типа hello обработано.")
-		return nil
-	}
-
-	log.Println("Неизвестный тип сообщения.")
-	return fmt.Errorf("неизвестный тип сообщения")
 }
