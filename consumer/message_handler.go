@@ -2,43 +2,35 @@ package consumer
 
 import (
 	"context"
-	"fmt"
 	"log"
-
-	"github.com/redis/go-redis/v9"
+	"rabbitmq/redis" // Импортируем ваш пакет с обёрткой
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// HandleMessage обрабатывает входящие сообщения, возможно используя Redis
-func HandleMessage(d amqp.Delivery, redisClient *redis.Client) error {
+// HandleMessage обрабатывает входящие сообщения и записывает их в Redis
+func HandleMessage(d amqp.Delivery, redisClient *redis.RedisClient) error {
+	// Логируем сообщение
 	log.Printf("Получено сообщение: %s", string(d.Body))
-
-	// Проверка подключения к Redis
-	_, err := redisClient.Ping(context.Background()).Result()
-	if err != nil {
-		log.Printf("Ошибка подключения к Redis: %s", err)
-		return err
-	}
-
-	
-
-	// Пример использования Redis для инкремента счетчика
-	err = redisClient.Incr(context.Background(), "message_count").Err()
-	if err != nil {
-		log.Printf("Ошибка при инкрементировании счетчика сообщений: %s", err)
-		return err
-	}
 
 	// Логируем заголовки сообщения для диагностики
 	log.Printf("Заголовки сообщения: %+v", d.Headers)
 
-	// Проверяем заголовок type
-	messageType, ok := d.Headers["type"].(string)
-	if ok && messageType == "hello" {
-		log.Println("Сообщение типа hello обработано.")
-		return nil
+	// Проверяем подключение к Redis с использованием обёртки
+	err := redisClient.Ping(context.Background())
+	if err != nil {
+		log.Printf("Ошибка при подключении к Redis: %s", err)
+		return err
 	}
 
-	log.Println("Неизвестный тип сообщения.")
-	return fmt.Errorf("неизвестный тип сообщения")
+	// Записываем сообщение в Redis (например, добавляем в список)
+	err = redisClient.LPush(context.Background(), "received_messages", string(d.Body)) 
+	if err != nil {
+		log.Printf("Ошибка при записи в Redis: %s", err)
+		return err
+	}
+
+	// Логируем, что сообщение успешно записано в Redis
+	log.Println("Сообщение успешно записано в Redis.")
+
+	return nil
 }

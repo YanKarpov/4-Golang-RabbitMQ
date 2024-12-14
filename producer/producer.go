@@ -15,7 +15,8 @@ func NewProducer(config *config.Config) *Producer {
 	return &Producer{Config: config}
 }
 
-func (p *Producer) Publish(message string) {
+// Publish отправляет сообщение в RabbitMQ и возвращает ошибку, если она произошла
+func (p *Producer) Publish(message string) error {
 	var conn *amqp.Connection
 	var err error
 
@@ -29,8 +30,8 @@ func (p *Producer) Publish(message string) {
 		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
-		log.Fatalf("Не удалось подключиться к RabbitMQ после 3 попыток: %s", err)
-		return
+		log.Printf("Не удалось подключиться к RabbitMQ после 3 попыток: %s", err)
+		return err // возвращаем ошибку
 	}
 	defer conn.Close()
 	log.Println("Успешное подключение к RabbitMQ.")
@@ -38,7 +39,8 @@ func (p *Producer) Publish(message string) {
 	// Создание канала
 	ch, err := conn.Channel()
 	if err != nil {
-		log.Fatalf("Не удалось открыть канал: %s", err)
+		log.Printf("Не удалось открыть канал: %s", err)
+		return err // возвращаем ошибку
 	}
 	defer ch.Close()
 
@@ -52,7 +54,8 @@ func (p *Producer) Publish(message string) {
 		nil,       // аргументы
 	)
 	if err != nil {
-		log.Fatalf("Не удалось объявить очередь: %s", err)
+		log.Printf("Не удалось объявить очередь: %s", err)
+		return err // возвращаем ошибку
 	}
 
 	// Отправка сообщения
@@ -67,8 +70,10 @@ func (p *Producer) Publish(message string) {
 		},
 	)
 	if err != nil {
-		log.Fatalf("Не удалось отправить сообщение: %s", err)
+		log.Printf("Не удалось отправить сообщение: %s", err)
+		return err // возвращаем ошибку
 	}
 
 	log.Printf("Отправлено сообщение: %s", message)
+	return nil // возвращаем nil, если всё прошло успешно
 }

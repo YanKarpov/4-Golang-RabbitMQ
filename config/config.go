@@ -1,6 +1,6 @@
 package config
 
-import "github.com/redis/go-redis/v9"
+import "rabbitmq/redis"  // Подключаем вашу обёртку Redis
 
 type Config struct {
     RabbitMQ struct {
@@ -9,16 +9,12 @@ type Config struct {
         Host     string
         Port     string
     }
-    Redis *redis.Client // Используем *redis.Client
+    Redis *redis.RedisClient // Используем вашу обёртку RedisClient
 }
 
 // NewConfig создаёт новую конфигурацию для RabbitMQ и Redis
 func NewConfig(rabbitLogin, rabbitPassword, rabbitHost, rabbitPort, redisAddr, redisPassword string, redisDB int) *Config {
-    redisClient := redis.NewClient(&redis.Options{
-        Addr:     redisAddr,
-        Password: redisPassword,
-        DB:       redisDB,
-    })
+    redisClient := redis.NewRedisClient(redisAddr, redisPassword, redisDB) // Создаём экземпляр RedisClient
 
     return &Config{
         RabbitMQ: struct {
@@ -32,6 +28,6 @@ func NewConfig(rabbitLogin, rabbitPassword, rabbitHost, rabbitPort, redisAddr, r
             Host:     rabbitHost,
             Port:     rabbitPort,
         },
-        Redis: redisClient, // Сохраняем *redis.Client
+        Redis: redisClient, // Сохраняем обёртку RedisClient
     }
 }
