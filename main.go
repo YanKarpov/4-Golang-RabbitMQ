@@ -31,8 +31,8 @@ func main() {
     log.Println("Создание API")
     api := api.NewAPI(redisClient, producer)
 
-    log.Println("Создание Consumer")
-    consumer := consumer.NewConsumer(rabbitMQConfig) 
+    log.Println("Создание Consumer с RedisClient")
+    consumer := consumer.NewConsumer(rabbitMQConfig, redisClient)  // Передаем redisClient сюда
 
     log.Println("Инициализация маршрутов Gin")
     r := gin.Default()
@@ -46,7 +46,7 @@ func main() {
     log.Println("Запуск Consumer в горутине")
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
-    go consumer.Consume(ctx) 
+    go consumer.Consume(ctx)
 
     log.Println("Запуск HTTP-сервера")
     if err := r.Run(":8080"); err != nil {

@@ -4,36 +4,28 @@ import (
 	"context"
 	"log"
 	"sync"
-	"time"
-
-	amqp "github.com/rabbitmq/amqp091-go"
+	"rabbitmq/redis" // Добавьте импорт Redis
 	"rabbitmq/config"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Consumer struct {
-	Config *config.Config
+	Config     *config.Config
+	RedisClient *redis.RedisClient // Добавили RedisClient
 }
 
-func NewConsumer(config *config.Config) *Consumer {
-	return &Consumer{Config: config}
+func NewConsumer(config *config.Config, redisClient *redis.RedisClient) *Consumer {
+	return &Consumer{
+		Config:     config,
+		RedisClient: redisClient, // Передаем RedisClient
+	}
 }
 
 // Consume подключается к RabbitMQ и обрабатывает сообщения параллельно
 func (c *Consumer) Consume(ctx context.Context) {
-	var conn *amqp.Connection
-	var err error
-
-	// Повторная попытка подключения
-	for i := 1; i <= 3; i++ {
-		conn, err = amqp.Dial("amqp://" + c.Config.RabbitMQ.Login + ":" + c.Config.RabbitMQ.Password + "@" + c.Config.RabbitMQ.Host + ":" + c.Config.RabbitMQ.Port + "/")
-		if err == nil {
-			break
-		}
-		log.Printf("Попытка %d подключения к RabbitMQ не удалась: %s", i, err)
-		time.Sleep(2 * time.Second)
-	}
+	conn, err := amqp.Dial("amqp://" + c.Config.RabbitMQ.Login + ":" + c.Config.RabbitMQ.Password + "@" + c.Config.RabbitMQ.Host + ":" + c.Config.RabbitMQ.Port + "/")
 	if err != nil {
-		log.Fatalf("Не удалось подключиться к RabbitMQ после 3 попыток: %s", err)
+		log.Fatalf("Не удалось подключиться к RabbitMQ: %s", err)
 		return
 	}
 	defer conn.Close()
@@ -84,6 +76,12 @@ func (c *Consumer) Consume(ctx context.Context) {
 	var wg sync.WaitGroup
 	log.Println("Ожидание сообщений. Для выхода нажмите CTRL+C")
 
+	// Перед обработкой сообщений проверим подключение к Redis
+	if err := c.RedisClient.Ping(ctx); err != nil {
+		log.Fatalf("Не удалось подключиться к Redis: %s", err)
+	}
+
+	// Основной цикл обработки сообщений
 	for {
 		select {
 		case <-ctx.Done():
@@ -105,7 +103,7 @@ func (c *Consumer) Consume(ctx context.Context) {
 				defer func() { <-semaphore }() // Освобождаем место для другой горутины
 
 				// Обработка сообщения
-				err := HandleMessage(d, c.Config.Redis)
+				err := HandleMessage(d, c.RedisClient) // Передаем redisClient для обработки
 				if err == nil {
 					// Подтверждение успешной обработки сообщения
 					if ackErr := d.Ack(false); ackErr != nil {

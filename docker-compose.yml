@@ -1,13 +1,10 @@
-version: '3.8'
+version: "3.8"
 
 services:
   app:
     build: .
     ports:
       - "8080:8080"
-    depends_on:
-      - rabbitmq
-      - redis
     networks:
       - mynetwork
 
@@ -22,15 +19,9 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     networks:
       - mynetwork
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:15672/"]
-      interval: 30s
-      retries: 3
-      start_period: 5s
-      timeout: 5s
 
   redis:
-    image: redis:alpine
+    image: redis:latest
     container_name: redis
     ports:
       - "6379:6379"
