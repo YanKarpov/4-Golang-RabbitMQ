@@ -5,6 +5,11 @@ services:
     build: .
     ports:
       - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - mynetwork
 
@@ -19,6 +24,12 @@ services:
       RABBITMQ_DEFAULT_PASS: guest
     networks:
       - mynetwork
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 5s
 
   redis:
     image: redis:latest
