@@ -3,7 +3,7 @@ package consumer
 import (
 	"context"
 	"log"
-	"rabbitmq/redis" 
+	"rabbitmq/redis"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -24,12 +24,5 @@ func HandleMessage(d amqp.Delivery, redisClient *redis.RedisClient) error {
 
 	// Логируем успешную запись в Redis
 	log.Println("Сообщение успешно записано в Redis.")
-
-	// Подтверждаем успешную обработку сообщения
-	if err := d.Ack(false); err != nil {
-		log.Printf("Ошибка при подтверждении сообщения: %s", err)
-		return err
-	}
-
 	return nil
 }
